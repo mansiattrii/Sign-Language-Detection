@@ -26,10 +26,9 @@
 
 - Layout on Zenodo: `<Category>/<N>. <Word>/MVI_xxxx.MOV`, some `.MP4`, a few extra takes in
   `Extra/` subfolders. Downloaded into `data/raw/<word>/` so the loader only needs the word.
-- **No signer IDs.** File names are camera counters. They come in runs of 3-4 consecutive numbers,
-  which look like one recording session each. The split (Milestone 2) groups by session so takes
-  from the same sitting never end up in both train and test. Own recordings are the real
-  signer-independent test.
+- **No signer IDs.** File names are camera counters. They come in runs of 3-4 consecutive numbers
+  per word, and neighbouring words share a sitting. Milestone 2 groups whole sittings (see below).
+  Own recordings are the real signer-independent test.
 - **Face indices.** All 53 are valid MediaPipe face-mesh points. Two corrections: (1) MediaPipe names
   sides from the signer's view, so the "left" groups in the original spec are MediaPipe's *right*
   groups; (2) the other eye's list was reordered to `[263, 387, 385, 362, 380, 373]` so that point i
@@ -114,3 +113,108 @@
   +-2 shoulder widths. The extremes (up to 6.5) are in pose z, MediaPipe's rough depth estimate,
   which is noisy. One clip (`cold/MVI_9333`) has a face 2.5 shoulder widths above the shoulders,
   probably from a few frames with misdetected shoulders. Left as is for now.
+
+
+## Milestone 2: split, augmentation and Random Forest baseline
+
+### What was built
+
+- **`dataset.py`.** Groups clips into recording *sittings* and saves a fixed split to
+  `data/processed/split.json` (indices plus file paths, so a changed dataset is detected and
+  refused). Every model and every ablation run loads this same file. Creating a new split needs
+  `--force`.
+- **`augment.py`.** Scaling, small 2D rotation, Gaussian noise on detected points only, time
+  warping with boundary jitter, and an optional horizontal flip (off by default). Unit-tested,
+  including the double flip returning the original clip exactly.
+- **`models.py`, `train.py`, `evaluate.py`.** Random Forest on per-clip mean and standard deviation
+  of every feature. `evaluate.py` writes top-1, top-5, macro F1, per-class accuracy, a confusion
+  matrix PNG and the five most-confused pairs, and evaluates own recordings separately once they
+  exist.
+- Resampling to 30 frames was already built in Milestone 1 (`features.resample`); Milestone 2
+  reuses its interpolation for time warping.
+
+### The split, and the leak it took two attempts to remove
+
+1. **First attempt: group by session within each word.** Runs of consecutive camera numbers per
+   word were kept together. The Random Forest scored 50.0% top-1, but the confusion matrix showed
+   pairs swapped in *both directions, every time*: all GOOD test clips predicted as BAD and all BAD
+   as GOOD; the same for I/YOU and GOOD MORNING/GOOD NIGHT.
+2. **Diagnosis.** GOOD is 5158-5160 and BAD is 5161-5163: one person signed both in one sitting.
+   If that sitting's GOOD clips are in test but its BAD clips are in train, the nearest thing the
+   model has seen is the same person signing BAD. Real confusion between similar signs is partial;
+   a clean swap points to a leak.
+3. **Fix: group by sitting across words.** Clips whose camera numbers are within 10 of each other,
+   across all words, form a sitting. Greetings and pronouns were filmed on cameras with overlapping
+   counters, which chained them into blocks of 110+ clips; blocks over 60 clips are re-split at
+   gaps above 5. Thresholds err towards bigger groups, because merging two sittings is harmless and
+   splitting one leaks. Result: 63 sittings.
+4. **Assigning sittings.** A sitting spans many words, so the split can't be stratified per word.
+   A seeded search tries 2000 random orders, fills test then val greedily towards about 20% of each
+   word, rejects any split that leaves a word missing from train, val or test, and keeps the
+   closest one. Final split: train 382 / val 102 / test 136 clips; every word has 3-7 test clips.
+5. **What the test set means.** It is *sitting-independent*, not signer-independent: the same
+   person can return on another day. Own recordings (Milestone 4) are the signer-independent test.
+
+### Augmentation choices
+
+- **Uniform speed changes do nothing here.** Every clip is trimmed and resampled to 30 frames, so
+  playing it 20% faster and resampling gives the same 30 frames. Time warping therefore changes
+  the speed *within* the clip (`u ** gamma`: faster at the start and slower at the end, or the
+  reverse) and crops up to 10% at each end, which also imitates the live segmenter cutting a sign
+  slightly early or late.
+- **Rotation and scaling act about each block's origin** (wrist, shoulder midpoint), which is
+  where the normalized coordinates are already centred, so no extra centring is needed.
+- **Noise only on detected points.** A missing hand must stay exactly zero; otherwise noise would
+  make "no hand" look like a tiny hand.
+- **Flip is off by default.** Mirroring swaps the dominant hand. That is a valid left-handed
+  signer, but for signs that are not symmetric it can teach the wrong thing, so it is an option to
+  test, not a default.
+- **Flip implementation:** one column permutation (left hand <-> right hand, flags swapped, pose
+  pairs 11/12, 13/14, 15/16, face mirror pairs) plus negating every x. The permutation is its own
+  inverse, which is why the double-flip test passes exactly.
+
+### Baseline results (INCLUDE test split, 136 clips, seed 42)
+
+| Model | Top-1 | Top-5 | Macro F1 |
+|---|---|---|---|
+| Random Forest, mean + std, all features | 0.581 | 0.926 | 0.530 |
+| Same, plus 5 augmented copies per clip | 0.596 | 0.912 | 0.559 |
+
+Validation top-1: 0.569 without augmentation, 0.598 with. The augmentation difference is 2 test
+clips on one seed, so it is not a meaningful effect. Most-confused pairs (no augmentation): GOOD
+MORNING/GOOD NIGHT (6 errors), MARKET->FATHER (4), GOOD MORNING->GOOD (4), SISTER->BROTHER (3),
+FATHER->SICK (3).
+
+### A hypothesis that turned out wrong
+
+Some errors were still total: all HOT clips predicted as SCHOOL, all MARKET clips as FATHER. My
+guess was that the forest recognised the *person* from body proportions. A forest trained on
+clip-averaged face shape alone scored 2.2% on test (chance is 3.3%), so static body shape does not
+identify words across sittings. The odd pairs also remain when the forest sees hands only. The
+likely cause is that the test sitting's signer uses a different variant of those signs, which is
+a property of the data and a limitation to state, not something the pipeline can fix.
+
+Side note from the same diagnostic: hands + pose scored 0.669 vs 0.581 for all features with the
+forest. One seed with a Random Forest; the real comparison is the LSTM ablation over 3 seeds.
+
+### Alternatives considered
+
+- *Random split:* takes of the same word from one sitting land on both sides; accuracy would look
+  far better than it is.
+- *scikit-learn `StratifiedGroupKFold`:* tried first; it can leave a word out of a fold entirely,
+  and with sittings spanning words it cannot stratify exactly anyway.
+- *Leave-one-signer-out:* the right protocol, but INCLUDE has no signer labels.
+
+### Likely interview questions
+
+- **How did you split data without signer IDs?** Grouped clips into recording sittings using camera
+  file numbers across words, and put whole sittings in one split. I found the need for
+  cross-word grouping from a confusion matrix with perfectly swapped pairs.
+- **Why is per-word grouping not enough?** One person records many words in a row. If their GOOD is
+  in test and their BAD in train, the model can match the person rather than the sign.
+- **Why does time warping not just change the speed?** Clips are resampled to a fixed length, so a
+  uniform speed change cancels out. Warping varies speed within the clip and jitters the boundaries.
+- **Why mean and standard deviation for the baseline?** They are the simplest fixed-size summary of a
+  sequence. They ignore order, which is exactly what the LSTM comparison tests.
+- **Why is top-5 so much higher than top-1?** Many errors are between close pairs (GOOD MORNING/GOOD
+  NIGHT, BROTHER/SISTER): the right word is usually among the first few guesses.

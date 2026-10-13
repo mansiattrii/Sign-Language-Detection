@@ -130,18 +130,21 @@ def trim_to_hands(features: np.ndarray, layout: FeatureLayout) -> np.ndarray:
     return features[present[0]:present[-1] + 1]
 
 
-def resample(sequence: np.ndarray, length: int) -> np.ndarray:
-    """Linearly interpolate a (T, F) sequence to (length, F) along the time axis."""
+def interpolate(sequence: np.ndarray, positions: np.ndarray) -> np.ndarray:
+    """Sample a (T, F) sequence at fractional frame positions in [0, T-1] by linear interpolation."""
     t = len(sequence)
     if t == 0:
-        raise ValueError("Cannot resample an empty sequence")
-    if t == 1:
-        return np.repeat(sequence, length, axis=0)
-    pos = np.linspace(0, t - 1, length)
+        raise ValueError("Cannot interpolate an empty sequence")
+    pos = np.clip(positions, 0, t - 1)
     lo = np.floor(pos).astype(int)
     hi = np.minimum(lo + 1, t - 1)
     w = (pos - lo)[:, None]
     return ((1 - w) * sequence[lo] + w * sequence[hi]).astype(sequence.dtype)
+
+
+def resample(sequence: np.ndarray, length: int) -> np.ndarray:
+    """Linearly interpolate a (T, F) sequence to (length, F) along the time axis."""
+    return interpolate(sequence, np.linspace(0, len(sequence) - 1, length))
 
 
 def count_hand_frames(features: np.ndarray, layout: FeatureLayout) -> int:

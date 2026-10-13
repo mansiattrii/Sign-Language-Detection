@@ -101,3 +101,34 @@ features:
 temporal:
   seq_len: 30
   min_hand_frames: 8
+
+split:
+  # INCLUDE has no signer IDs. One signer records many words in a row, so camera file numbers
+  # that are close together (across all words) form a sitting. Whole sittings go to train, val
+  # or test; otherwise the model can recognise the person instead of the sign.
+  sitting_max_gap: 10
+  # Greetings and pronouns were filmed on cameras with overlapping counters, which chains them
+  # into blocks of 110+ clips. Blocks larger than this are re-split at gaps above fallback_gap.
+  max_sitting_clips: 60
+  fallback_gap: 5
+  test_fraction: 0.2
+  val_fraction: 0.2  # of what remains after the test set
+  max_attempts: 2000
+
+augment:
+  scale_range: [0.9, 1.1]
+  rotation_deg: 10
+  noise_std: 0.02  # in normalized units (hand length / shoulder width)
+  # Uniform speed changes vanish when clips are resampled to seq_len, so time warping
+  # instead varies the speed within a clip and jitters where the sign starts and ends.
+  time_warp_gamma: [0.8, 1.25]
+  boundary_jitter: 0.1  # max fraction of the clip cropped at each end
+  flip: false
+
+feature_groups: [HANDS, POSE, FACE, FLAGS]
+
+random_forest:
+  n_estimators: 500
+  max_features: sqrt
+  min_samples_leaf: 1
+  augment_copies: 0

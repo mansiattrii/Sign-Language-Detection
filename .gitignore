@@ -7,6 +7,7 @@ data/raw/*
 data/own_recordings/*
 data/processed/*
 !data/**/.gitkeep
+!data/processed/split.json
 
 models/*
 !models/.gitkeep

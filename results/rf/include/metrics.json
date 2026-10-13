@@ -1,0 +1,13 @@
+{
+  "model": "rf",
+  "groups": [
+    "HANDS",
+    "POSE",
+    "FACE",
+    "FLAGS"
+  ],
+  "n_clips": 136,
+  "top1_accuracy": 0.5808823529411765,
+  "top5_accuracy": 0.9264705882352942,
+  "macro_f1": 0.5295954045954046
+}

@@ -24,3 +24,11 @@ python -m src.extract --limit 2        # quick check: 2 videos per word
 python -m src.extract                  # all videos -> data/processed/include.npz
 python scripts/visualize_landmarks.py --video data/raw/hello/MVI_0029.MOV --out results/figures/landmarks_hello.png
 ```
+
+## Split, baseline and evaluation
+
+```powershell
+python -m src.dataset                                   # writes data/processed/split.json (once)
+python -m src.train --model rf                          # Random Forest baseline -> models/rf.joblib
+python -m src.evaluate --model models/rf.joblib         # metrics, confusion matrix -> results/rf/
+```
