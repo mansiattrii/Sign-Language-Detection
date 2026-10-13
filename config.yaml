@@ -1,0 +1,103 @@
+seed: 42
+
+paths:
+  raw_dir: data/raw
+  own_dir: data/own_recordings
+  processed_dir: data/processed
+  models_dir: models
+  results_dir: results
+
+# Folder names under raw_dir / own_dir. Order defines the class ids.
+# 30 words from INCLUDE, each with 20-21 videos.
+words:
+  - hello
+  - good_morning
+  - good_night
+  - thank_you
+  - how_are_you
+  - i
+  - you
+  - we
+  - he
+  - she
+  - they
+  - father
+  - mother
+  - brother
+  - sister
+  - friend
+  - good
+  - bad
+  - happy
+  - sick
+  - hot
+  - cold
+  - new
+  - house
+  - school
+  - hospital
+  - market
+  - car
+  - bus
+  - dog
+
+video_extensions: [.mov, .mp4, .avi]
+
+holistic:
+  model_complexity: 1
+  min_detection_confidence: 0.5
+  min_tracking_confidence: 0.5
+  refine_face_landmarks: false
+  # INCLUDE videos are 1920x1080; downscaling first makes extraction faster.
+  max_frame_width: 960
+
+features:
+  # nose, left/right shoulder, left/right elbow, left/right wrist
+  pose_indices: [0, 11, 12, 13, 14, 15, 16]
+  pose_mirror_pairs: [[11, 12], [13, 14], [15, 16]]
+
+  # Sides follow MediaPipe naming: the signer's own left/right, so "left" appears on the
+  # right of an unmirrored image. Verified against FACEMESH_* in mediapipe 0.10.21.
+  face_regions:
+    right_eyebrow: [70, 63, 105, 66, 107, 55, 65, 52, 53, 46]
+    left_eyebrow: [300, 293, 334, 296, 336, 285, 295, 282, 283, 276]
+    right_eye: [33, 160, 158, 133, 153, 144]
+    left_eye: [263, 387, 385, 362, 380, 373]
+    lips_outer: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185]
+    nose_tip: [1]
+
+  # Each face point and its mirror image, checked by reflecting the MediaPipe canonical
+  # face model across its midline. Points not listed (17, 0, 1) lie on the midline.
+  face_mirror_pairs:
+    - [70, 300]
+    - [63, 293]
+    - [105, 334]
+    - [66, 296]
+    - [107, 336]
+    - [55, 285]
+    - [65, 295]
+    - [52, 282]
+    - [53, 283]
+    - [46, 276]
+    - [33, 263]
+    - [160, 387]
+    - [158, 385]
+    - [133, 362]
+    - [153, 380]
+    - [144, 373]
+    - [61, 291]
+    - [146, 375]
+    - [91, 321]
+    - [181, 405]
+    - [84, 314]
+    - [185, 409]
+    - [40, 270]
+    - [39, 269]
+    - [37, 267]
+
+  shoulder_min_visibility: 0.5
+  eps: 1.0e-6
+
+temporal:
+  seq_len: 30
+  min_hand_frames: 8

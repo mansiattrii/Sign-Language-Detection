@@ -1,0 +1,11 @@
+# Python 3.11. mediapipe 0.10.21 is the last release that ships the legacy mp.solutions.holistic API.
+mediapipe==0.10.21
+opencv-contrib-python==4.11.0.86
+numpy==1.26.4
+tensorflow==2.17.1
+scikit-learn==1.9.1
+pandas==3.0.6
+matplotlib==3.11.2
+PyYAML==6.0.3
+tqdm==4.70.1
+pytest==9.1.1
