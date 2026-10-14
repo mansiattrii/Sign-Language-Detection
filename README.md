@@ -32,3 +32,16 @@ python -m src.dataset                                   # writes data/processed/
 python -m src.train --model rf                          # Random Forest baseline -> models/rf.joblib
 python -m src.evaluate --model models/rf.joblib         # metrics, confusion matrix -> results/rf/
 ```
+
+## LSTM, GRU and the feature ablation
+
+```powershell
+python -m src.train --model lstm                        # -> models/lstm.joblib + models/lstm.keras
+python -m src.evaluate --model models/lstm.joblib       # -> results/lstm/
+python -m src.ablation                                  # 3 feature sets x 3 seeds -> results/ablation.md
+python -m src.ablation --model gru                      # same for the GRU -> results/ablation_gru.md
+python -m src.ablation --model rf                       # same for the Random Forest -> results/ablation_rf.md
+```
+
+The ablation appends each run to its CSV as soon as it finishes, so an interrupted run resumes
+when started again (`--fresh` starts over).

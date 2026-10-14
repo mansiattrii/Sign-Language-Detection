@@ -218,3 +218,119 @@ forest. One seed with a Random Forest; the real comparison is the LSTM ablation 
   sequence. They ignore order, which is exactly what the LSTM comparison tests.
 - **Why is top-5 so much higher than top-1?** Many errors are between close pairs (GOOD MORNING/GOOD
   NIGHT, BROTHER/SISTER): the right word is usually among the first few guesses.
+
+## Milestone 3: LSTM, feature ablation and GRU comparison
+
+### What was built
+
+- `build_recurrent` in `src/models.py`: LSTM(128, return_sequences) -> Dropout(0.3) -> LSTM(64) ->
+  Dropout(0.3) -> Dense(64, relu) -> Dense(30, softmax), Adam, sparse categorical cross-entropy.
+  It takes the input feature size as a parameter, so the ablation runs the identical architecture
+  on 128, 149 or 308 features. `cell="gru"` swaps in GRU layers of the same sizes.
+- Training (`src/train.py`): a `PyDataset` that reshuffles and freshly augments the training clips
+  every epoch, so the model never sees the same augmented clip twice. Early stopping restores the
+  weights of the best epoch. Class weights switch on only if the largest class has 1.5x the clips
+  of the smallest; with 20-21 clips per word they stay off. Seeds go through
+  `keras.utils.set_random_seed` plus TensorFlow op determinism: retraining the final model
+  reproduced its ablation run exactly (val 0.824, test 0.706).
+- `src/ablation.py`: 3 feature configurations x 3 seeds (42, 43, 44), each evaluated on the same
+  fixed test split. Writes every run to the CSV as it finishes (resumable) and a Markdown summary
+  with mean ± sample standard deviation.
+
+### Two training decisions, both made on validation only
+
+- **Early stopping watches validation accuracy, not loss.** Without early stopping, validation loss
+  bottomed out around epoch 25 while validation accuracy kept rising until about epoch 120. The model
+  becomes over-confident on the clips it gets wrong, which raises the loss even as more clips are
+  classified correctly. Stopping on loss stopped at epoch 26 with val top-1 0.598. Patience is 50
+  epochs because accuracy on 102 clips jumps by several points from one epoch to the next.
+- **Augmentation stays on.** All features, 3 seeds: val top-1 0.686 ± 0.017 with augmentation,
+  0.673 ± 0.057 without. Same mean within noise; augmentation made seeds more consistent. These are
+  best-epoch validation scores, so both are optimistic.
+
+### Ablation results (INCLUDE test split, 136 clips, mean ± std over 3 seeds)
+
+| Model | Features | Val top-1 | Test top-1 | Test top-5 | Test macro F1 |
+|---|---|---|---|---|---|
+| LSTM | hands (128) | 0.817 ± 0.030 | 0.752 ± 0.021 | 0.985 ± 0.013 | 0.760 ± 0.015 |
+| LSTM | hands + pose (149) | 0.863 ± 0.052 | 0.757 ± 0.060 | 0.968 ± 0.015 | 0.751 ± 0.060 |
+| LSTM | hands + pose + face (308) | 0.686 ± 0.017 | 0.691 ± 0.072 | 0.922 ± 0.008 | 0.687 ± 0.093 |
+| GRU | hands (128) | 0.791 ± 0.091 | 0.694 ± 0.011 | 0.949 ± 0.013 | 0.697 ± 0.017 |
+| GRU | hands + pose (149) | 0.840 ± 0.023 | 0.679 ± 0.030 | 0.968 ± 0.011 | 0.677 ± 0.048 |
+| GRU | hands + pose + face (308) | 0.673 ± 0.025 | 0.676 ± 0.000 | 0.931 ± 0.011 | 0.674 ± 0.028 |
+| Random Forest | hands (128) | 0.569 ± 0.026 | 0.591 ± 0.008 | 0.907 ± 0.004 | 0.552 ± 0.006 |
+| Random Forest | hands + pose (149) | 0.667 ± 0.026 | 0.681 ± 0.011 | 0.941 ± 0.007 | 0.630 ± 0.013 |
+| Random Forest | hands + pose + face (308) | 0.601 ± 0.028 | 0.593 ± 0.011 | 0.934 ± 0.007 | 0.547 ± 0.017 |
+
+Every configuration includes FLAGS (the 2 hand-present columns). Per-run tables are in
+`results/ablation.md`, `results/ablation_gru.md` and `results/ablation_rf.md`.
+
+### What the ablation showed
+
+- **Temporal order matters.** The LSTM beats the Random Forest on mean/std features in every
+  configuration (hands: 0.752 vs 0.591). Pairs that differ mainly in order or movement path improved
+  most: the forest confused GOOD MORNING and GOOD NIGHT 6 times, the final LSTM once.
+- **The face hurts.** Adding 159 face columns lowers LSTM test top-1 from about 0.75 to 0.691 and
+  makes it less stable across seeds. With 382 training clips, more than doubling the input size
+  gives the network more ways to fit the training sittings. Most of the face subset describes who
+  is signing (face shape) rather than what is signed, and the non-manual cues that do matter
+  (eyebrows in questions) belong to sentence-level grammar, which is out of scope here.
+- **Hands vs hands + pose is a tie on test** (0.752 ± 0.021 vs 0.757 ± 0.060). Pose wins on
+  validation (0.863 vs 0.817). The Random Forest gains clearly from pose (0.591 -> 0.681): without
+  temporal order, where the hands are relative to the body carries much of the information.
+- **The GRU is consistently below the LSTM** on test (0.68-0.69 vs about 0.75), despite similar
+  validation scores. The gap is about as large as the seed spread, so the claim is only that the
+  GRU was worse here, not that GRUs are worse in general.
+- **Validation is optimistic.** It picks the stopping epoch and has only 102 clips from a handful of
+  sittings, so val-test gaps of 0.05-0.10 are expected. Test numbers are the ones to quote.
+
+### Final model
+
+`feature_groups` is now `[HANDS, POSE, FLAGS]`, chosen by validation accuracy (not test). The saved
+`models/lstm.keras` is that configuration with the default seed 42, which happens to be the weakest
+of its three seeds on test:
+
+| Split | Top-1 | Top-5 | Macro F1 |
+|---|---|---|---|
+| Validation (102 clips) | 0.824 | 0.971 | 0.817 |
+| Test (136 clips) | 0.706 | 0.956 | 0.703 |
+
+The number to quote is the ablation mean, 0.757 ± 0.060, not a single seed. Most confused test
+pairs: GOOD MORNING->GOOD (4), WE->MARKET (4), SISTER->BROTHER (3), DOG->HOW ARE YOU (3),
+I->YOU (3). GOOD MORNING starts with the GOOD sign, so a clip that stresses its first half reads as
+GOOD. HOT->SCHOOL (2 of 3) persists from the forest, consistent with the sign-variant explanation
+in Milestone 2.
+
+`results/rf/` from Milestone 2 was trained on all four groups; rerunning `src.train --model rf` now
+uses hands + pose, the new default.
+
+### Alternatives considered
+
+- *Saving the best seed:* seed 43 scored 0.922 on validation. Choosing on validation would be
+  legitimate, but one fixed seed keeps the pipeline simple and avoids presenting a lucky run as the
+  result.
+- *Masking layer for missing hands:* a missing hand is zeros plus a flag of 0, so the network
+  already knows when a hand is absent, and every sequence has the same length, so there is no
+  padding to mask.
+- *Bidirectional LSTM, attention, 1D CNN, Transformer:* possibly small gains, but with 382 training
+  clips the spread between seeds already exceeds the differences between configurations. More data
+  would help more than a bigger model.
+- *Monitoring validation loss with a learning-rate schedule:* would also avoid the early stop, but
+  adds hyperparameters to tune on a 102-clip validation set.
+
+### Likely interview questions
+
+- **Why an LSTM and not averaged features?** Signs are movements: GOOD MORNING and GOOD NIGHT
+  differ in the order and direction of the motion. The mean/std baseline cannot see order; the LSTM
+  gains about 16 points over it on hands-only features.
+- **Why did adding the face make it worse?** Too many inputs for the amount of data (overfitting),
+  and the face mostly encodes identity, not the isolated word. Feature choice is a modelling
+  decision to test, not assume.
+- **Why report mean ± std over seeds?** With 136 test clips one clip is 0.7 points, and seeds of
+  the same configuration differ by up to 14 points. A single run cannot separate two configurations.
+- **Why does validation loss rise while accuracy rises?** Cross-entropy punishes confident mistakes
+  heavily. As the network fits the training sittings it becomes very confident, so the clips it
+  still gets wrong cost a lot of loss even while more clips are classified correctly.
+- **Is your test score the real-world accuracy?** No. It is accuracy on unseen recording sittings of
+  INCLUDE signers in INCLUDE conditions. Own recordings (Milestone 4) test a new signer, camera and
+  room.

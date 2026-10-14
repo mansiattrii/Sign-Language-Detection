@@ -1,0 +1,10 @@
+model,config,groups,n_features,seed,epochs_run,best_epoch,val_top1,test_top1,test_top5,test_macro_f1
+rf,hands,HANDS+FLAGS,128,42,,,0.5980,0.5809,0.9044,0.5452
+rf,hands,HANDS+FLAGS,128,43,,,0.5588,0.5956,0.9118,0.5561
+rf,hands,HANDS+FLAGS,128,44,,,0.5490,0.5956,0.9044,0.5551
+rf,hands_pose,HANDS+POSE+FLAGS,149,42,,,0.6471,0.6691,0.9338,0.6185
+rf,hands_pose,HANDS+POSE+FLAGS,149,43,,,0.6569,0.6838,0.9485,0.6291
+rf,hands_pose,HANDS+POSE+FLAGS,149,44,,,0.6961,0.6912,0.9412,0.6436
+rf,hands_pose_face,HANDS+POSE+FACE+FLAGS,308,42,,,0.5686,0.5809,0.9265,0.5296
+rf,hands_pose_face,HANDS+POSE+FACE+FLAGS,308,43,,,0.6176,0.5956,0.9338,0.5492
+rf,hands_pose_face,HANDS+POSE+FACE+FLAGS,308,44,,,0.6176,0.6029,0.9412,0.5635

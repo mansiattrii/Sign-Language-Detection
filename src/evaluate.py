@@ -1,5 +1,6 @@
 """Evaluate a saved model on the INCLUDE test split and, if present, on own recordings.
 
+    python -m src.evaluate --model models/lstm.joblib
     python -m src.evaluate --model models/rf.joblib
 
 Writes results/<name>/{metrics.json, per_class.csv, confused_pairs.csv, confusion_matrix.png},
@@ -12,7 +13,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import joblib
 import matplotlib
 
 matplotlib.use("Agg")
@@ -24,7 +24,7 @@ from sklearn.metrics import confusion_matrix, f1_score, top_k_accuracy_score
 
 from src.config import load_config
 from src.dataset import Dataset, load_dataset, load_split
-from src.models import summary_features
+from src.models import RECURRENT_CELLS, load_bundle, summary_features
 
 SEQUENTIAL_BLUE = ["#ffffff", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 TEXT_DARK, TEXT_LIGHT = "#1a1a19", "#ffffff"
@@ -39,6 +39,8 @@ def predict_proba(bundle: dict[str, Any], X: np.ndarray) -> np.ndarray:
         proba = np.zeros((len(X), n_words))
         proba[:, model.classes_] = model.predict_proba(summary_features(Xc))
         return proba
+    if bundle["kind"] in RECURRENT_CELLS:
+        return bundle["model"].predict(Xc, verbose=0)
     raise ValueError(f"unknown model kind {bundle['kind']}")
 
 
@@ -84,23 +86,29 @@ def plot_confusion(cm: np.ndarray, words: list[str], title: str, path: Path) -> 
     plt.close(fig)
 
 
+def scores(y: np.ndarray, proba: np.ndarray) -> dict[str, float]:
+    """Top-1, top-5 and macro F1. Macro F1 averages only over words that occur in y, so a test set
+    without some word (e.g. own recordings) is not penalised for it."""
+    labels = np.arange(proba.shape[1])
+    pred = proba.argmax(axis=1)
+    present = np.isin(labels, y)
+    return {
+        "top1_accuracy": float((pred == y).mean()),
+        "top5_accuracy": float(top_k_accuracy_score(y, proba, k=5, labels=labels)),
+        "macro_f1": float(f1_score(y, pred, labels=labels[present], average="macro", zero_division=0)),
+    }
+
+
 def evaluate(bundle: dict[str, Any], data: Dataset, out_dir: Path, title: str) -> dict[str, Any]:
     words = bundle["words"]
-    labels = np.arange(len(words))
     proba = predict_proba(bundle, data.X)
     pred = proba.argmax(axis=1)
-    cm = confusion_matrix(data.y, pred, labels=labels)
+    cm = confusion_matrix(data.y, pred, labels=np.arange(len(words)))
     support = cm.sum(axis=1)
     per_class = np.divide(np.diag(cm), support, out=np.full(len(words), np.nan), where=support > 0)
 
-    metrics = {
-        "model": bundle["name"],
-        "groups": bundle["groups"],
-        "n_clips": int(len(data.y)),
-        "top1_accuracy": float((pred == data.y).mean()),
-        "top5_accuracy": float(top_k_accuracy_score(data.y, proba, k=5, labels=labels)),
-        "macro_f1": float(f1_score(data.y, pred, labels=labels[support > 0], average="macro", zero_division=0)),
-    }
+    metrics = {"model": bundle["name"], "groups": bundle["groups"], "n_clips": int(len(data.y)),
+               **scores(data.y, proba)}
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     pd.DataFrame({"word": words, "clips": support, "correct": np.diag(cm), "accuracy": per_class}) \
@@ -126,7 +134,7 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    bundle = joblib.load(args.model)
+    bundle = load_bundle(args.model)
     processed = Path(cfg["paths"]["processed_dir"])
     results = Path(cfg["paths"]["results_dir"]) / bundle["name"]
 

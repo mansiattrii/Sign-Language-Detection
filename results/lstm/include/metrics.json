@@ -1,0 +1,12 @@
+{
+  "model": "lstm",
+  "groups": [
+    "HANDS",
+    "POSE",
+    "FLAGS"
+  ],
+  "n_clips": 136,
+  "top1_accuracy": 0.7058823529411765,
+  "top5_accuracy": 0.9558823529411765,
+  "macro_f1": 0.7029265233676999
+}
