@@ -158,3 +158,24 @@ ablation:
     hands: [HANDS, FLAGS]
     hands_pose: [HANDS, POSE, FLAGS]
     hands_pose_face: [HANDS, POSE, FACE, FLAGS]
+
+# Live app. Frame counts assume about 25 fps (the INCLUDE frame rate); tune them with --debug,
+# which shows the motion value per frame. Signs contain holds: in INCLUDE clips, about half of all
+# hand-visible frames move less than 0.02 shoulder widths, so the thresholds below were set from
+# the longest hold inside each sign (scripts/replay_segmenter.py measures the effect on test).
+segmenter:
+  start_frames: 3  # consecutive frames with a visible, moving hand that start a sign
+  preroll_frames: 6  # frames kept from before the start, so the beginning of the sign is not lost
+  end_absent_frames: 8  # hands out of view this long ends a sign
+  # At a threshold of 0.01, 95% of train+val signs hold still for at most 12 frames in a row.
+  end_still_frames: 15
+  max_frames: 150
+  # Mean hand-point movement per frame in shoulder widths; a resting hand jitters by about 0.005.
+  motion_threshold: 0.01
+
+live:
+  model: models/lstm.joblib
+  camera_index: 0
+  frame_width: 640
+  frame_height: 480
+  min_confidence: 0.5  # below this the word is shown but not added to the sentence

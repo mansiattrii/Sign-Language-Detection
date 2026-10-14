@@ -334,3 +334,98 @@ uses hands + pose, the new default.
 - **Is your test score the real-world accuracy?** No. It is accuracy on unseen recording sittings of
   INCLUDE signers in INCLUDE conditions. Own recordings (Milestone 4) test a new signer, camera and
   room.
+
+## Milestone 5: live app (built before Milestone 4)
+
+The order was swapped so that own recordings are made inside the app: practice mode prompts a
+word, predicts the sign live and saves it as a labelled clip. Milestone 4 then evaluates those clips
+the same way as the INCLUDE test set.
+
+### What was built
+
+- `src/segmenter.py`: a state machine that knows nothing about cameras. It takes one frame at a
+  time with two booleans (hand visible, hand moving) and returns the frames of each finished sign.
+  - IDLE -> SIGNING after 3 frames in a row with a visible *and moving* hand. Requiring motion
+    means hands resting in view never start a sign.
+  - SIGNING -> END when the hands are out of view for 8 frames, held still for 15 frames, or the
+    sign reaches 150 frames. Trailing frames without hands or with the hands held still are cut off.
+  - 6 pre-roll frames from before the start are kept, so the beginning of the sign is not lost.
+  - Motion is the mean movement of all 21 hand points per frame, divided by shoulder width. All
+    points, so a handshape change with a fixed wrist counts as motion; shoulder width, so the
+    threshold does not depend on how far the signer stands from the camera.
+- `src/recognizer.py`: turns a segment into word probabilities by calling `build_sequence`, the
+  function that built the training data. A test feeds cached INCLUDE clips frame by frame through
+  this path and checks that features (to 1e-6) and predictions equal the training pipeline's.
+- `src/app.py`: webcam loop with the overlay (landmarks, segmenter state, FPS, last word with
+  confidence, top-3 with bars, sentence, key help). Words below 0.5 confidence are shown but not
+  added to the sentence. Holistic always gets the unmirrored frame; only the displayed image is
+  mirrored, because a mirrored input swaps the left- and right-hand blocks.
+- Practice mode (`--practice --signer NAME`): prompts each word, saves every segmented sign to
+  `data/own_recordings/<word>/<signer>_<n>.mp4` with a per-session CSV log of the live prediction.
+  r deletes the last take, n skips a word. Signs too short to classify are not saved.
+- `--video FILE --headless` runs the same app on a video file, which is how the app was checked
+  without a webcam.
+- `scripts/replay_segmenter.py`: streams the cached landmarks of a split back to back, with a
+  20-frame pause between signs (hands dropped, or frozen in view), through the same segmenter and
+  recognizer, and reports how many signs come out as exactly one segment with the right word.
+
+### How the thresholds were chosen
+
+INCLUDE clips are 25 fps and cut tightly: in 131 of the 136 test clips a hand is visible
+up to the last frame, and signers end with their hands resting at their sides in view. So the
+segmenter cannot rely on hands leaving the frame; it must also end on stillness. The risk is
+ending a sign during a hold. On train + val clips, the longest still run inside a sign at a
+threshold of 0.02 reached 15 frames for 10% of signs; at 0.01 the 95th percentile is 12 frames. A
+resting hand jitters by about 0.005 shoulder widths per frame, so 0.01 is about twice the jitter.
+
+A sweep on the validation split (threshold 0.006-0.015, still frames 12-25, start frames 2-3) found
+a plateau: excluding the 25-frame still timeout, every setting gave 93-99 of 102 signs as one
+segment and 0.716-0.794 word accuracy, and settings at thresholds 0.006-0.01 differed by only one or
+two clips. The chosen setting (0.01, 15, 3) is on that plateau. The sweep
+did show one hard limit: the still timeout must be shorter than the pause between signs. With
+25 still frames and 20-frame frozen pauses, consecutive signs merged and only about 60 of 102 came out
+as one segment.
+
+### Results without a webcam (`scripts/replay_segmenter.py`, final model)
+
+| Split | Pause between signs | Exactly one segment | Split in two or more | Missed | Word accuracy |
+|---|---|---|---|---|---|
+| Test (136) | hands dropped | 126 (92.6%) | 10 | 0 | 0.625 |
+| Test (136) | hands frozen in view | 126 (92.6%) | 10 | 0 | 0.647 |
+| Val (102) | hands dropped | 98 (96.1%) | | | 0.775 |
+
+The same model on pre-cut test clips scores 0.706, so automatic segmentation costs about 6-8
+points. The 10 signs split in two alone account for up to 7.4 points (10 of 136); I have not
+checked which part of each split sign caused it. These numbers use INCLUDE clips at
+25 fps; the webcam frame rate and a new signer will change them, which is what Milestone 4 measures.
+
+The app also ran headless on three INCLUDE videos (HELLO, GOOD NIGHT, HOW ARE YOU) and recognized
+each. Practice-mode clips saved from those runs decoded correctly, and re-extracting them gave the
+same predictions as live (e.g. 0.862 vs 0.857, the gap from video compression).
+
+### Alternatives considered
+
+- *Sliding window that classifies every N frames:* simpler, but it predicts during transitions
+  and rest, and needs a separate "no sign" class trained on rest data that INCLUDE does not have.
+- *A trained boundary detector:* needs continuous signing with labelled boundaries; INCLUDE has
+  isolated clips only.
+- *Wrist speed only:* misses handshape changes; all 21 hand points were used instead.
+- *Time-based thresholds instead of frame counts:* would adapt to webcam FPS automatically; frame
+  counts are simpler to test and explain, and are the first thing to revisit if the webcam runs at a
+  very different rate.
+
+### Likely interview questions
+
+- **How does the segmenter work?** Three states. A sign starts when a hand is visible and moving for
+  3 frames, and ends when the hands leave the view or stay still long enough. The frames in between
+  (plus a short pre-roll) go through the same feature function as training and into the LSTM.
+- **How do you know live features match training features?** Both call `build_sequence`, and a
+  unit test pushes cached INCLUDE clips through the live code path frame by frame and checks equality.
+- **Why not mirror the camera image like a selfie view?** MediaPipe labels left and right hands from
+  the image; mirroring the input would swap the two hand blocks relative to training. Only the
+  display is mirrored.
+- **How did you test the live app without a webcam?** The segmenter is a pure state machine with
+  unit tests; the app runs on video files; and the replay script measures segmentation on the
+  test split with no camera at all.
+- **What is the main live failure mode?** Signs split in two (10 of 136 test signs in replay). A
+  longer still timeout splits fewer signs but forces the user to pause longer between signs.

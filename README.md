@@ -45,3 +45,16 @@ python -m src.ablation --model rf                       # same for the Random Fo
 
 The ablation appends each run to its CSV as soon as it finishes, so an interrupted run resumes
 when started again (`--fresh` starts over).
+
+## Live app
+
+```powershell
+python -m src.app                                        # webcam; c clear, Backspace delete, q quit
+python -m src.app --debug                                # also shows the motion value the segmenter uses
+python -m src.app --practice --signer mansi --takes 5    # prompts each word, saves every take
+python -m src.app --video data/raw/hello/MVI_0029.MOV --headless
+python scripts/replay_segmenter.py                       # segmenter + model on the test split, no webcam
+```
+
+Practice mode saves clips to `data/own_recordings/<word>/<signer>_<n>.mp4` and a per-session log
+to `data/own_recordings/practice_logs/`. In practice mode, r deletes the last take and n skips a word.

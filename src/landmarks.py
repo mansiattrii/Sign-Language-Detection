@@ -63,6 +63,14 @@ class RawLandmarks:
             fps=fps,
         )
 
+    def frames(self) -> list[FrameLandmarks]:
+        """Split back into per-frame landmarks, as the live app receives them."""
+        def part(arr: np.ndarray, t: int) -> np.ndarray | None:
+            return None if np.isnan(arr[t]).all() else arr[t]
+
+        return [FrameLandmarks(part(self.left_hand, t), part(self.right_hand, t), part(self.pose, t),
+                               part(self.face, t)) for t in range(len(self))]
+
     def save(self, path: Path) -> None:
         """Write to an .npz file atomically, so an interrupted run never leaves a half-written cache."""
         path.parent.mkdir(parents=True, exist_ok=True)
