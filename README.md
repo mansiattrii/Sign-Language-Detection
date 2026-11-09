@@ -58,3 +58,16 @@ python scripts/replay_segmenter.py                       # segmenter + model on 
 
 Practice mode saves clips to `data/own_recordings/<word>/<signer>_<n>.mp4` and a per-session log
 to `data/own_recordings/practice_logs/`. In practice mode, r deletes the last take and n skips a word.
+
+## Own recordings (new-signer test)
+
+Record with practice mode (above) or with fixed-length takes:
+
+```powershell
+python scripts/record_signs.py --word hello --signer mansi --count 5   # space record, r redo, q quit
+python -m src.extract --source own                                     # -> data/processed/own.npz
+python -m src.evaluate --model models/lstm.joblib                      # -> results/lstm/own/
+```
+
+The own-recordings report also gives INCLUDE test accuracy on the same words, for a fair comparison
+when only some words were recorded.

@@ -14,3 +14,10 @@ models/*
 *.keras
 *.h5
 *.joblib
+
+# Backup: track processed features and trained models (raw videos stay ignored)
+!data/processed/**
+!models/*
+!*.keras
+!*.h5
+!*.joblib

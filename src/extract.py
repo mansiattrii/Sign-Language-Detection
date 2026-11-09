@@ -2,7 +2,7 @@
 
 Stage 1 (slow): run Holistic on each video and cache its raw landmarks under
     data/processed/landmarks/<source>/<word>/<video>.npz
-Videos with a cache file are skipped, so the stage can be interrupted and resumed.
+Videos with an up-to-date cache file are skipped, so the stage can be interrupted and resumed.
 
 Stage 2 (fast): turn every cached clip into a (seq_len, F) array with build_sequence()
 and write data/processed/<source>.npz. Changing the feature definition only requires
@@ -54,8 +54,14 @@ def cache_path(cache_root: Path, word: str, video: Path) -> Path:
     return cache_root / word / f"{video.stem}.npz"
 
 
+def needs_extraction(video: Path, cached: Path) -> bool:
+    """True if there is no cache file, or the video was replaced after it was cached (a redone
+    own-recording take reuses the deleted take's file name)."""
+    return not cached.exists() or cached.stat().st_mtime < video.stat().st_mtime
+
+
 def extract_landmarks(videos: list[tuple[str, Path]], cache_root: Path, holistic_cfg: dict[str, Any]) -> list[Path]:
-    todo = [(w, v) for w, v in videos if not cache_path(cache_root, w, v).exists()]
+    todo = [(w, v) for w, v in videos if needs_extraction(v, cache_path(cache_root, w, v))]
     log.info("%d videos, %d already cached, %d to process", len(videos), len(videos) - len(todo), len(todo))
     failed = []
     start = time.perf_counter()

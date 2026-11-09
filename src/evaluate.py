@@ -99,7 +99,9 @@ def scores(y: np.ndarray, proba: np.ndarray) -> dict[str, float]:
     }
 
 
-def evaluate(bundle: dict[str, Any], data: Dataset, out_dir: Path, title: str) -> dict[str, Any]:
+def evaluate(bundle: dict[str, Any], data: Dataset, out_dir: Path, title: str,
+             extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Score a model on `data` and write the report files; `extra` is added to metrics.json."""
     words = bundle["words"]
     proba = predict_proba(bundle, data.X)
     pred = proba.argmax(axis=1)
@@ -108,7 +110,7 @@ def evaluate(bundle: dict[str, Any], data: Dataset, out_dir: Path, title: str) -
     per_class = np.divide(np.diag(cm), support, out=np.full(len(words), np.nan), where=support > 0)
 
     metrics = {"model": bundle["name"], "groups": bundle["groups"], "n_clips": int(len(data.y)),
-               **scores(data.y, proba)}
+               **scores(data.y, proba), **(extra or {})}
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     pd.DataFrame({"word": words, "clips": support, "correct": np.diag(cm), "accuracy": per_class}) \
@@ -146,7 +148,18 @@ def main() -> None:
 
     own_path = processed / "own.npz"
     if own_path.exists():
-        evaluate(bundle, load_dataset(own_path), results / "own", f"{bundle['name']}: own recordings")
+        own = load_dataset(own_path)
+        # Own recordings may cover only some words; compare with INCLUDE test on the same words.
+        test = data.subset(split["test"])
+        same = test.subset(np.flatnonzero(np.isin(test.y, own.y)))
+        reference = {"own_words": int(len(np.unique(own.y))), "signers": sorted(set(own.signers)),
+                     "include_test_same_words_clips": int(len(same.y)),
+                     "include_test_same_words": scores(same.y, predict_proba(bundle, same.X)) if len(same.y) else None}
+        evaluate(bundle, own, results / "own", f"{bundle['name']}: own recordings", reference)
+        if len(same.y):
+            ref = reference["include_test_same_words"]
+            print(f"INCLUDE test on the same {reference['own_words']} word(s), {len(same.y)} clips: "
+                  f"top-1 {ref['top1_accuracy']:.3f} | top-5 {ref['top5_accuracy']:.3f} | macro F1 {ref['macro_f1']:.3f}")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ import numpy as np
 
 from src.config import load_config
 from src.landmarks import FrameLandmarks, HolisticTracker, draw_landmarks, video_fps
+from src.own_recordings import next_take_path, write_video
 from src.recognizer import Prediction, Recognizer
 from src.segmenter import Segment, Segmenter, State, hand_motion
 
@@ -63,22 +64,9 @@ class Practice:
     def count(self) -> int:
         return sum(t.word == self.target for t in self.saved)
 
-    def _next_path(self) -> Path:
-        folder = self.own_dir / self.target
-        folder.mkdir(parents=True, exist_ok=True)
-        taken = {p.stem.rsplit("_", 1)[-1] for p in folder.glob(f"{self.signer}_*.mp4")}
-        n = 1
-        while str(n) in taken:
-            n += 1
-        return folder / f"{self.signer}_{n}.mp4"
-
     def save(self, images: list[np.ndarray], fps: float, prediction: Prediction | None) -> Take:
-        path = self._next_path()
-        h, w = images[0].shape[:2]
-        writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
-        for image in images:
-            writer.write(image)
-        writer.release()
+        path = next_take_path(self.own_dir / self.target, self.signer)
+        write_video(path, images, fps)
         take = Take(path, self.target, prediction, time.strftime("%Y-%m-%d %H:%M:%S"))
         self.saved.append(take)
         self._write_log()
