@@ -1,5 +1,7 @@
 # Real-time Indian Sign Language word recognition
 
+[![tests](https://github.com/mansiattrii/Sign-Language-Detection/actions/workflows/tests.yml/badge.svg)](https://github.com/mansiattrii/Sign-Language-Detection/actions/workflows/tests.yml)
+
 Recognizes isolated ISL words from a webcam using MediaPipe Holistic landmarks and an LSTM,
 and builds a running sentence on screen. Work in progress; the full write-up comes at the end.
 

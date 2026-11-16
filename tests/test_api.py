@@ -8,12 +8,11 @@ from src.dataset import load_dataset
 from src.evaluate import predict_proba
 from src.features import build_sequence
 from src.landmarks import FrameLandmarks, RawLandmarks
+from tests.conftest import CACHE, DATASET
 from tests.test_features import LAYOUT, make_raw
 
 CFG = load_config("config.yaml")
-DATASET = Path("data/processed/include.npz")
-CACHE = Path("data/processed/landmarks/include")
-needs_data = pytest.mark.skipif(not (DATASET.exists() and CACHE.exists()), reason="needs the extracted INCLUDE data")
+needs_data = pytest.mark.needs_data
 
 
 def frame_json(frame: FrameLandmarks) -> dict:

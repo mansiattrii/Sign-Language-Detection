@@ -9,12 +9,10 @@ from src.evaluate import predict_proba
 from src.landmarks import FrameLandmarks, RawLandmarks
 from src.recognizer import Recognizer
 
-MODEL = Path("models/lstm.joblib")
-DATASET = Path("data/processed/include.npz")
-CACHE = Path("data/processed/landmarks/include")
+from tests.conftest import CACHE, DATASET
 
-needs_data = pytest.mark.skipif(not (MODEL.exists() and DATASET.exists() and CACHE.exists()),
-                                reason="needs the trained model and extracted INCLUDE data")
+MODEL = Path("models/lstm.joblib")
+needs_data = pytest.mark.needs_data
 
 
 @needs_data
