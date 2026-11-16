@@ -71,3 +71,30 @@ python -m src.evaluate --model models/lstm.joblib                      # -> resu
 
 The own-recordings report also gives INCLUDE test accuracy on the same words, for a fair comparison
 when only some words were recorded.
+
+## Reproduce from scratch
+
+The landmark cache and the dataset file are not in git, only the final LSTM (`models/lstm.joblib`
+plus `models/lstm.keras`) and the fixed split (`data/processed/split.json`). To rebuild everything:
+
+1. Download INCLUDE from Zenodo record 4010759 (https://zenodo.org/records/4010759). It is split
+   into per-category archives laid out as `<Category>/<N>. <Word>/MVI_xxxx.MOV`.
+2. Copy the clips for the 30 words in `config.yaml` into `data/raw/<word>/`, keeping the original
+   file names, e.g. `data/raw/hello/MVI_0029.MOV`. The split is checked against the exact 620
+   paths it was made from, so use this list as the reference:
+
+   ```powershell
+   python -c "import json; s=json.load(open('data/processed/split.json')); print(*sorted(p for k in ('train','val','test') for p in s[k]['paths']), sep='\n')"
+   ```
+
+3. Run the pipeline in order:
+
+   ```powershell
+   python -m src.extract                              # ~2.5 s per video on CPU, about 25 min for 620 clips
+   python -m src.train --model lstm                   # seed 42, writes models/lstm.joblib and models/lstm.keras
+   python -m src.evaluate --model models/lstm.joblib  # -> results/lstm/
+   ```
+
+   `python -m src.dataset` is only needed to make a new split; the committed one is reused as is.
+   Extraction caches raw landmarks per video under `data/processed/landmarks/`, so a second run
+   with different feature settings skips MediaPipe.
