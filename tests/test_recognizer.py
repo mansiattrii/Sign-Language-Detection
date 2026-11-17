@@ -5,8 +5,8 @@ import pytest
 
 from src.config import load_config
 from src.dataset import load_dataset
-from src.evaluate import predict_proba
 from src.landmarks import FrameLandmarks, RawLandmarks
+from src.models import predict_proba
 from src.recognizer import Recognizer
 
 from tests.conftest import CACHE, DATASET

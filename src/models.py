@@ -8,7 +8,6 @@ from typing import Any
 import joblib
 import keras
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 
 RECURRENT_CELLS = {"lstm": keras.layers.LSTM, "gru": keras.layers.GRU}
 
@@ -21,7 +20,9 @@ def summary_features(X: np.ndarray) -> np.ndarray:
     return np.concatenate([X.mean(axis=1), X.std(axis=1)], axis=1)
 
 
-def build_random_forest(rf_cfg: dict[str, Any], seed: int) -> RandomForestClassifier:
+def build_random_forest(rf_cfg: dict[str, Any], seed: int) -> Any:
+    from sklearn.ensemble import RandomForestClassifier
+
     return RandomForestClassifier(
         n_estimators=rf_cfg["n_estimators"],
         max_features=rf_cfg["max_features"],
@@ -76,3 +77,17 @@ def load_bundle(path: Path) -> dict[str, Any]:
     if bundle["kind"] in RECURRENT_CELLS:
         bundle["model"] = keras.models.load_model(Path(path).parent / bundle["model"], compile=False)
     return bundle
+
+
+def predict_proba(bundle: dict[str, Any], X: np.ndarray) -> np.ndarray:
+    """Class probabilities (N, n_words) for any saved model kind."""
+    n_words = len(bundle["words"])
+    Xc = X[:, :, bundle["columns"]]
+    if bundle["kind"] == "rf":
+        model = bundle["model"]
+        proba = np.zeros((len(X), n_words))
+        proba[:, model.classes_] = model.predict_proba(summary_features(Xc))
+        return proba
+    if bundle["kind"] in RECURRENT_CELLS:
+        return bundle["model"].predict(Xc, verbose=0)
+    raise ValueError(f"unknown model kind {bundle['kind']}")

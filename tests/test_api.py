@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -5,9 +7,9 @@ import pytest
 
 from src.config import load_config
 from src.dataset import load_dataset
-from src.evaluate import predict_proba
 from src.features import build_sequence
 from src.landmarks import FrameLandmarks, RawLandmarks
+from src.models import predict_proba
 from tests.conftest import CACHE, DATASET
 from tests.test_features import LAYOUT, make_raw
 
@@ -123,3 +125,11 @@ def test_landmarks_endpoint_rejects_clips_with_too_few_hand_frames(client):
     assert response.status_code == 422
     assert "hand" in detail_text(response)
     assert client.post("/predict/landmarks", json={"frames": []}).status_code == 422
+
+
+def test_api_imports_without_the_extraction_and_training_stack():
+    """The Docker image installs requirements-api.txt only, so these packages must not be hard imports."""
+    code = ("import sys; "
+            "sys.modules.update({m: None for m in ('mediapipe', 'cv2', 'sklearn', 'pandas', 'matplotlib')}); "
+            "import api.app")
+    subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)

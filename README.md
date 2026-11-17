@@ -92,7 +92,7 @@ python -m src.app --debug       # also shows the motion value the segmenter uses
 **Tests**, and the segmentation replay for people without a webcam:
 
 ```powershell
-python -m pytest                        # 76 tests; 4 need the extracted dataset and are skipped without it
+python -m pytest                        # 77 tests; 4 need the extracted dataset and are skipped without it
 python scripts/replay_segmenter.py      # segmenter + model on the INCLUDE test split
 python -m src.app --video data/raw/hello/MVI_0029.MOV --headless
 ```
@@ -125,9 +125,9 @@ Only the final LSTM (`models/lstm.joblib` + `models/lstm.keras`) and the fixed s
 | Path | What it holds |
 |---|---|
 | `src/` | Pipeline: `landmarks` (Holistic), `features` (normalization), `dataset` (sitting split), `augment`, `models`, `train`, `evaluate`, `ablation`, `segmenter`, `predict`, `recognizer`, `app` (webcam) |
-| `api/` | FastAPI service around `src.predict` |
+| `api/` | FastAPI service around `src.predict`; `requirements-api.txt` is its runtime, without MediaPipe or OpenCV |
 | `scripts/` | Segmentation replay, own-clip recording, landmark visualization |
-| `tests/` | 76 pytest tests, run in CI |
+| `tests/` | 77 pytest tests, run in CI |
 | `models/` | Final LSTM (seed 42, hands + pose) |
 | `data/` | Raw videos and caches (ignored); `split.json` (committed) |
 | `results/` | Metrics, confusion matrices and ablation tables for every model |

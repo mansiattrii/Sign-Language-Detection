@@ -12,10 +12,9 @@ from typing import Any
 import numpy as np
 
 from src.config import load_config
-from src.evaluate import predict_proba
 from src.features import FeatureLayout, build_sequence
 from src.landmarks import FrameLandmarks, RawLandmarks
-from src.models import load_bundle
+from src.models import load_bundle, predict_proba
 
 TopWords = list[tuple[str, float]]
 

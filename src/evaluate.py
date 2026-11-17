@@ -24,24 +24,10 @@ from sklearn.metrics import confusion_matrix, f1_score, top_k_accuracy_score
 
 from src.config import load_config
 from src.dataset import Dataset, load_dataset, load_split
-from src.models import RECURRENT_CELLS, load_bundle, summary_features
+from src.models import load_bundle, predict_proba
 
 SEQUENTIAL_BLUE = ["#ffffff", "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 TEXT_DARK, TEXT_LIGHT = "#1a1a19", "#ffffff"
-
-
-def predict_proba(bundle: dict[str, Any], X: np.ndarray) -> np.ndarray:
-    """Class probabilities (N, n_words) for any saved model kind."""
-    n_words = len(bundle["words"])
-    Xc = X[:, :, bundle["columns"]]
-    if bundle["kind"] == "rf":
-        model = bundle["model"]
-        proba = np.zeros((len(X), n_words))
-        proba[:, model.classes_] = model.predict_proba(summary_features(Xc))
-        return proba
-    if bundle["kind"] in RECURRENT_CELLS:
-        return bundle["model"].predict(Xc, verbose=0)
-    raise ValueError(f"unknown model kind {bundle['kind']}")
 
 
 def confused_pairs(cm: np.ndarray, words: list[str], k: int = 5) -> pd.DataFrame:

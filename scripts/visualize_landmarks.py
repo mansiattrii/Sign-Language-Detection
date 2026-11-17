@@ -18,7 +18,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.config import load_config  # noqa: E402
 from src.features import FeatureLayout, frame_features  # noqa: E402
-from src.landmarks import HAND_CONNECTIONS, HolisticTracker, RawLandmarks, draw_landmarks, iter_video_frames, video_fps  # noqa: E402
+from src.landmarks import HolisticTracker, RawLandmarks, draw_landmarks, hand_connections, iter_video_frames, video_fps  # noqa: E402
 
 
 def main() -> None:
@@ -69,7 +69,7 @@ def main() -> None:
         pts = feats[idx, layout.blocks[name]].reshape(-1, 3)
         if not pts.any():
             continue
-        for a, b in HAND_CONNECTIONS:
+        for a, b in hand_connections():
             ax.plot(pts[[a, b], 0], pts[[a, b], 1], color=color, lw=1.5)
         ax.scatter(pts[:, 0], pts[:, 1], s=12, color=color, label=name.lower().replace("_", " "))
     ax.scatter([0], [0], marker="x", color="black", label="wrist = origin")

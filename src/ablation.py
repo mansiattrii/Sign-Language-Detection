@@ -18,8 +18,8 @@ import keras
 import pandas as pd
 
 from src.config import load_config
-from src.evaluate import predict_proba, scores
-from src.models import RECURRENT_CELLS
+from src.evaluate import scores
+from src.models import RECURRENT_CELLS, predict_proba
 from src.train import fit, load_training_data
 
 log = logging.getLogger("ablation")

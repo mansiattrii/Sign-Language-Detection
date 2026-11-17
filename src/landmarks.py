@@ -1,5 +1,8 @@
 """MediaPipe Holistic wrapper and the raw landmark containers shared by extraction and the live app.
 
+mediapipe and cv2 are imported inside the functions that use them, so code that only needs the
+containers (features, the API) does not pay for them.
+
 Coordinates are stored with x and z multiplied by the image aspect ratio (width / height),
 so all three axes are in units of image height. Without this, a 16:9 video and a 4:3 webcam
 would stretch distances and angles differently.
@@ -7,18 +10,16 @@ would stretch distances and angles differently.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterator
 
-import cv2
-import mediapipe as mp
 import numpy as np
 
 N_HAND = 21
 N_POSE = 33
 N_FACE = 468
 
-HAND_CONNECTIONS = sorted(mp.solutions.hands.HAND_CONNECTIONS)
 UPPER_BODY_CONNECTIONS = [(11, 12), (11, 13), (13, 15), (12, 14), (14, 16)]
 
 
@@ -95,6 +96,13 @@ def _to_array(landmark_list: Any, aspect: float, with_visibility: bool = False) 
     return np.asarray(rows, dtype=np.float32)
 
 
+@lru_cache(maxsize=1)
+def hand_connections() -> list[tuple[int, int]]:
+    import mediapipe as mp
+
+    return sorted(mp.solutions.hands.HAND_CONNECTIONS)
+
+
 class HolisticTracker:
     """Runs MediaPipe Holistic frame by frame.
 
@@ -104,6 +112,8 @@ class HolisticTracker:
     """
 
     def __init__(self, holistic_cfg: dict[str, Any]):
+        import mediapipe as mp
+
         self.max_frame_width = holistic_cfg.get("max_frame_width")
         self._holistic = mp.solutions.holistic.Holistic(
             static_image_mode=False,
@@ -114,6 +124,8 @@ class HolisticTracker:
         )
 
     def process(self, frame_bgr: np.ndarray) -> FrameLandmarks:
+        import cv2
+
         h, w = frame_bgr.shape[:2]
         if self.max_frame_width and w > self.max_frame_width:
             scale = self.max_frame_width / w
@@ -142,6 +154,8 @@ class HolisticTracker:
 
 def iter_video_frames(path: Path) -> Iterator[np.ndarray]:
     """Yield BGR frames of a video file."""
+    import cv2
+
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise IOError(f"Cannot open video: {path}")
@@ -156,6 +170,8 @@ def iter_video_frames(path: Path) -> Iterator[np.ndarray]:
 
 
 def video_fps(path: Path) -> float:
+    import cv2
+
     cap = cv2.VideoCapture(str(path))
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
@@ -172,6 +188,8 @@ def extract_video(path: Path, holistic_cfg: dict[str, Any]) -> RawLandmarks:
 def draw_landmarks(image: np.ndarray, frame: FrameLandmarks, face_indices: list[int],
                    pose_indices: list[int]) -> np.ndarray:
     """Draw the hands, the used pose points and the face subset onto a BGR image in place."""
+    import cv2
+
     h = image.shape[0]
 
     # x was multiplied by width/height, so pixel x is simply x * height.
@@ -181,7 +199,7 @@ def draw_landmarks(image: np.ndarray, frame: FrameLandmarks, face_indices: list[
     for hand, color in ((frame.left_hand, (255, 128, 0)), (frame.right_hand, (0, 128, 255))):
         if hand is None:
             continue
-        for a, b in HAND_CONNECTIONS:
+        for a, b in hand_connections():
             cv2.line(image, px(hand[a]), px(hand[b]), color, 2)
         for p in hand:
             cv2.circle(image, px(p), 3, (255, 255, 255), -1)
